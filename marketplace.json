@@ -1,0 +1,14 @@
+{
+  "name": "dev-workflow-automation",
+  "owner": {
+    "name": "Matteo Adduci & Giuseppe Vincenzi",
+    "email": "matteo.adduci94@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "dev-workflow-automation",
+      "source": "./dev-workflow-automation",
+      "description": "A comprehensive suite to automate development sessions, gathering specifications, tracking progress, writing docs, checking code quality, testing, and managing git workflows."
+    }
+  ]
+}
