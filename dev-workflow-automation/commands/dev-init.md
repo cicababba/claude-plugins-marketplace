@@ -1,99 +1,127 @@
-Initialize a structured development session for any development task (new feature, bug fix, refactoring, performance optimization, etc.):
-**IMPORTANT**: This command must never produce code snippets or implementations, only analysis and specifications.
-**IMPORTANT**: All generated files (context-analysis.md, specification.md, session.md, etc.) must ALWAYS be written in ENGLISH, regardless of the language used in the conversation.
+**IMPORTANT**: This command must never produce code snippets, pseudocode, or implementations. Only analysis and specifications.  
+**IMPORTANT**: All generated files (`context-analysis.md`, `specification.md`, etc.) MUST be written in ENGLISH, regardless of conversation language.
 
-## 1. Identify the relevant context
+---
 
-- Ask the user which files or folders you should analyze to understand the relevant context. Give examples (e.g., /src/auth, /src/models/user.ts).
-- When the user provides multiple paths, create one subagent per path.
-- Each subagent must scan only its assigned path, and extract:
-  - Existing code patterns in that area
-  - Dependencies and imports
-  - Related tests (if any)
+## Process Control & States
+
+Maintain an internal state machine and do not deviate:
+
+- **States**: `INIT` → `CONTEXT_SCANNING` → `SPEC_QA` → `SUMMARY_AWAIT_CONFIRMATION` → `AWAIT_FILE_GEN_DECISION` → `FILES_WRITTEN` → `AWAIT_PLANNER_DECISION` → `READY_TO_PLAN`.
+- **Booleans**:
+  - `summary_confirmed` (default `false`)
+  - `files_generated` (default `false`)
+  - `tests_requested` (`"unspecified" | "yes" | "no"`, default `"unspecified"`)
+
+### Hard Guardrails
+
+- You MUST NOT propose or mention planning while `files_generated=false`. If asked to plan earlier, respond:  
+  “Planning is blocked until `context-analysis.md` and `specification.md` are created.”
+- If new requirements are introduced after `FILES_WRITTEN`, revert to `SPEC_QA`, set `files_generated=false`, and regenerate files only after confirmation.
+- Never output any code or pseudocode. Do not include fenced code blocks that look like implementations.
+
+---
+
+## 1) Identify the relevant context (`INIT` → `CONTEXT_SCANNING`)
+
+- Ask which files/folders to analyze (e.g., `/src/auth`, `/src/models/user.ts`).
+- If multiple paths, create one subagent per path. **Cap subagents at 8**; if more, batch and inform the user.
+- Each subagent scans only its path and extracts:
+  - Existing code patterns
+  - Dependencies/imports
+  - Related tests
   - Current implementation details
-- After scanning all paths, aggregate all findings from the subagents and organize them by analyzed path.
-- Create and save in this step a structured analysis (separate findings by path), this will be reused later, output it to the user but with a Quick Summary.
+- Aggregate findings by path.
+- Save a structured analysis and output a **Quick Summary** plus the per-path details.
 
-## 2. Specification Gathering
+Move to `SPEC_QA`.
 
-- Ask the user exactly ONE targeted question at a time, always starting from the single most critical unknown that blocks progress.
-- Do NOT list multiple questions at once. Only after the user answers, decide the next most important question and ask it.
-- Rank potential questions by impact (highest first) and only ask the highest-impact one.
-- Do not restate previous answers. Avoid grouping questions together.
-- **IMPORTANT:** No assumptions, think hard and proceed iteratively and thoroughly until all necessary details are clarified.
-- Always prioritize the most critical unknowns first.
-- If an answer is unclear or incomplete, ask a follow-up before moving on.
-- Wait for each answer before asking the next question.
-- Be adaptive and not rigid: let each answer guide the next question logically.
-- If requirements appear to conflict, present the trade-offs clearly and ask for prioritization.
-- Ask exactly one question at a time; if vague/contradictory, you may ask up to 4 follow-ups sequentially, still one at a time.
-- **IMPORTANT:** Think hard and stop only when you have enough clear and concrete detail to produce an actionable implementation plan.
-- **IMPORTANT**: Once you've gathered all the requirements, provide the user with a quick summary of what needs to be done.
-- **IMPORTANT**: NEVER start planning before the user confirms the quick summary.
-- **IMPORTANT**: Even if the user confirms the quick summary, ask if you can start planning the development-planner agent.
-- **IMPORTANT**: After you gathered all the specification, ask the user if he wants test to be written and follow the next steps accordingly.
-  - If the the answer is not clear, DO NOT generate tests.
+---
 
-## 3. Create Files
+## 2) Specification Gathering (`SPEC_QA`)
 
-- Generate slug from task description: lowercase, spaces to hyphens, remove accents/punctuation, keep [a-z0-9-].
-- Handle collisions by appending -2, -3, etc.
-- Create session directory: `.claude/dev-sessions/YYYY-MM-DD-HHMM-${slug}/`
+- Ask exactly **one** targeted question at a time, always the highest-impact unknown first.
+- No assumptions; if an answer is unclear, ask a focused follow-up before moving on.
+- If requirements conflict, present trade-offs and request prioritization.
+- Stop only when details are sufficient to produce an actionable implementation plan.
 
-**A. Context Analysis file:**
+Then:
 
-- Path: `.claude/dev-sessions/`
-- Format: `YYYY-MM-DD-HHMM-${slug}/context-analysis.md`
-- Structure:
+- Provide a **Quick Summary** of requirements.
+- Set state to `SUMMARY_AWAIT_CONFIRMATION`.
 
-```md
-# Context Analysis
+### After gathering all requirements
 
-[The saved structured analysis from step 1 exactly as it is. Do not regenerate.]
-```
+1. Provide a quick summary.
+2. Wait for explicit confirmation from the user that the summary is correct. Set `summary_confirmed=true`.
+3. Move to `AWAIT_FILE_GEN_DECISION` and ASK:  
+   “Do you want me to generate `context-analysis.md` and `specification.md` now?”
+4. **ONLY** if the user says **YES**:
 
-**B. Specification file:**
+   - Generate slug from task description (lowercase, hyphens, `[a-z0-9-]`, strip accents/punctuation). Handle collisions by appending `-2`, `-3`, etc.
+   - Create directory: `.claude/dev-sessions/YYYY-MM-DD-HHMM-${slug}/`
+   - Write:
 
-- Path: `.claude/dev-sessions/`
-- Format: `YYYY-MM-DD-HHMM-${slug}/specification.md`
-- Structure:
+     - `.claude/dev-sessions/YYYY-MM-DD-HHMM-${slug}/context-analysis.md`:
 
-```md
-# Specification
+       ```md
+       # Context Analysis
 
-[Include here the complete detailed specification gathered through the Q&A process in step 2. Do not summarize - include all requirements, constraints, acceptance criteria, and technical details discussed with the user.]
-```
+       [The saved structured analysis from step 1 exactly as it is. Do not regenerate.]
+       ```
 
-## 4. Track the active session
+     - `.claude/dev-sessions/YYYY-MM-DD-HHMM-${slug}/specification.md`:
 
-- Create or update `.claude/dev-sessions/.current-session` with the active session filename, the filename MUST BE `.claude/dev-sessions/YYYY-MM-DD-HHMM-${slug}`.
+       ```md
+       # Specification
 
-## 5. Next Steps
+       [Include here the complete detailed specification gathered through the Q&A process in step 2. Do not summarize - include all requirements, constraints, acceptance criteria, and technical details discussed with the user.]
+       ```
 
-Inform the user that the analysis is complete, invite him to take a look at the generated files and
-start planning with development-planner agent **only** after `context-analysis.md` and `specification.md` are created.
+   - Update `.claude/dev-sessions/.current-session` with the session path.
+   - Set `files_generated=true` and move to `FILES_WRITTEN`.
 
-## Error Handling
+5. Inform the user the files are ready and provide the session path.
+6. Move to `AWAIT_PLANNER_DECISION` and **ONLY THEN** ask:  
+   “Do you want me to start the development-planner agent?”
 
-- NEVER START CODING, in this phase you only generate a new session, you ONLY create the `context-analysis` and the `specification`
-- If context analysis fails: Ask user to verify file paths exist and are accessible
-- If file creation fails: Attempt alternative directory structure in current working directory
-- If slug generation produces conflicts, suggest appending an incrementing number (e.g., -2, -3) or propose alternative unique slugs
-- If the user said he do not want tests, BE SURE to add this in the `context-analysis.md` and `session.md`
-- IMPORTANT: If the user provides new specifications or adds features during the session:
-  - If session status is `PLANNING` or `READY`:
-    - Return to Step 2 (Specification Gathering) to collect and validate the new requirements
-    - Resume the full process from that point onward (Steps 2 through execution), using existing context and files as a base
-  - If session status is not `PLANNING` or `READY` (e.g., `IN_PROGRESS`, `COMPLETED` etc.):
-    - Inform the user that the current session is already in [status]
-    - Suggest starting a new session to avoid disrupting the integrity of a finalized or ongoing execution plan
+---
 
-## Validation Steps
+## 3) Error Handling & Idempotency
 
-1. Confirm context-analysis.md contains the structured analysis from step 1
-2. **IMPORTANT**: Confirm specification.md contains the complete detailed specification gathered in step 2
-3. Validate that `.claude/dev-sessions/.current-session` file points to the correct session
-4. **IMPORTANT**: Check that all dependencies between steps are logically sound (no circular dependencies)
-5. Ensure no code generation has occurred in any step.
-6. **IMPORTANT**: Start planning **only** after `context-analysis.md` and `specification.md` are created.
-7. **IMPORTANT**: NEVER start coding.
+- If context scan fails: ask the user to verify paths exist and are accessible.
+- If file creation fails: attempt current working directory as fallback; report final location.
+- If slug collision: append `-2`, `-3`, etc.
+- If the user said they do not want tests, record `tests_requested="no"` and include this in both files.
+- If the user asks to regenerate files, overwrite in the same session directory and re-update `.current-session`.
+
+---
+
+## 4) Validation Gates (must pass before moving forward)
+
+1. `context-analysis.md` contains the structured analysis from step 1 verbatim.
+2. `specification.md` contains the complete detailed specification from step 2 (no summaries).
+3. `.current-session` points to `.claude/dev-sessions/YYYY-MM-DD-HHMM-${slug}`.
+4. No code/pseudocode has been produced.
+5. Planning can start **only** when `files_generated=true`.
+
+---
+
+## 5) Test Policy
+
+- After specifications: explicitly ask whether to include tests.
+- If the answer is unclear, set `tests_requested="unspecified"` and do not generate tests.
+- If “no,” record this in both files.
+
+---
+
+## 6) Next Steps Messaging
+
+- After `FILES_WRITTEN`:  
+  “Analysis is complete. Please review `context-analysis.md` and `specification.md`. Planning can start on request.”
+
+---
+
+## 7) NEVER start coding
+
+- This phase only initializes a new session and creates the two files.
