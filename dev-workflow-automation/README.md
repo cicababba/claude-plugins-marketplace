@@ -121,3 +121,11 @@ Overrides are available with `--include` / `--exclude` flags.
 - All generated documentation is in **English**.
 - `/quality-check` never writes to source files. Reports live under `.claude/dev-sessions/quality-reports/`.
 - Sessions are stored under `.claude/dev-sessions/YYYY-MM-DD-HHMM-<slug>/` with `.current-session` pointing to the active one.
+
+---
+
+## 👥 Authors
+
+Ideated and developed in collaboration with:
+- **Matteo Adduci** - [@cicababba](https://github.com/cicababba)
+- **Giuseppe Vincenzi** - [@giuvincenzi](https://github.com/giuvincenzi)
