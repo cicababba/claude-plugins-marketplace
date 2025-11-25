@@ -45,3 +45,6 @@ temp/
 .env
 .env.local
 .env.*.local
+
+
+CLAUDE.md
