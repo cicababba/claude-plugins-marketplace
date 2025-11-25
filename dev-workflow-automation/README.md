@@ -2,8 +2,7 @@
 
 > A comprehensive Claude Code plugin that transforms your development process with structured planning, execution tracking, automated documentation, and code quality checks.
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/cicababba/claude-plugins-marketplace)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](../LICENSE)
+[![Version](https://img.shields.io/badge/version-1.4.0-blue.svg)](https://github.com/cicababba/claude-plugins-marketplace) [![License](https://img.shields.io/badge/license-MIT-green.svg)](../LICENSE)
 
 ---
 
@@ -38,13 +37,13 @@
 
 ```bash
 # 1. Start a new development session
-/dev-init
+/init
 
 # 2. Execute your implementation plan
-/dev-run
+/run
 
 # 3. Finalize and close the session
-/dev-end
+/end
 
 # 4. Run code quality checks (anytime)
 /quality-check
@@ -56,12 +55,28 @@
 
 ### 4 Slash Commands
 
-| Command | Description |
-|---------|-------------|
-| `/dev-init` | Initialize structured development sessions with context analysis |
-| `/dev-run` | Execute implementation plans step-by-step with progress tracking |
-| `/dev-end` | Finalize sessions with commits, docs, and quality checks |
-| `/quality-check` | Generate standalone code quality reports |
+| Command          | Description                                                      |
+| ---------------- | ---------------------------------------------------------------- |
+| `/init`          | Initialize structured development sessions with context analysis |
+| `/run`           | Execute implementation plans step-by-step with progress tracking |
+| `/end`           | Finalize sessions with commits, docs, and quality checks         |
+| `/quality-check` | Generate standalone code quality reports                         |
+
+### 9 Reusable Skills
+
+Skills are model-invoked capabilities that encapsulate reusable logic. Commands delegate to skills for a cleaner, more maintainable architecture.
+
+| Skill                       | Description                                                      |
+| --------------------------- | ---------------------------------------------------------------- |
+| `session-manager`           | Session lifecycle management (create, load, update, close)       |
+| `artifact-fs-manager`       | Unified file handler for dev artifacts (read/write/check)        |
+| `dev-context-analysis`      | Code path analysis for patterns, dependencies, and tests         |
+| `dev-specification-qa`      | Requirements gathering via one-question-at-a-time Q&A            |
+| `dev-plan-orchestrator`     | Wrapper for development-planner agent invocation                 |
+| `dev-execution-orchestrator`| Step execution, sub-agent dispatch, and progress tracking        |
+| `dev-session-closure`       | Session finalization with optional commit/docs/quality triggers  |
+| `dev-quality-report`        | Quality report generation wrapper for code-quality-analyzer      |
+| `git-and-docs`              | Coordinate git commits and documentation generation              |
 
 ### 11 Specialized Sub-Agents
 
@@ -79,6 +94,45 @@
 
 ---
 
+## 🏗️ Architecture
+
+This plugin uses a layered architecture separating user interaction, orchestration logic, and execution:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    SLASH COMMANDS                           │
+│  /init    /run    /end    /quality-check                    │
+│  (User-invoked entry points - thin orchestrators)           │
+└─────────────────────────┬───────────────────────────────────┘
+                          │ delegate to
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                       SKILLS                                │
+│  session-manager | artifact-fs-manager | dev-context-analysis│
+│  dev-specification-qa | dev-plan-orchestrator               │
+│  dev-execution-orchestrator | dev-session-closure           │
+│  dev-quality-report | git-and-docs                          │
+│  (Model-invoked reusable logic - single responsibility)     │
+└─────────────────────────┬───────────────────────────────────┘
+                          │ invoke when needed
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      SUB-AGENTS                             │
+│  development-planner | react-frontend-dev | nodejs-backend  │
+│  git-commit-manager | docs-generator | code-quality-analyzer│
+│  (Explicitly dispatched - heavy lifting & code generation)  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Key Principles:**
+
+- **Commands** are thin orchestrators that delegate to skills
+- **Skills** encapsulate reusable logic with single responsibility
+- **Agents** perform heavy lifting (code generation, analysis, commits)
+- Each layer only communicates with adjacent layers
+
+---
+
 ## 💡 Use Cases
 
 - **Feature Development** - From specification gathering to deployment with full traceability
@@ -93,11 +147,12 @@
 
 ## 📖 Detailed Command Reference
 
-### ✅ 1. `/dev-init` — Start a New Development Session
+### ✅ 1. `/init` — Start a New Development Session
 
 **Purpose:** Prepare a clean, structured environment before any coding happens.
 
 **What it does:**
+
 - Identifies the relevant context by scanning specific file paths (via sub‑agents)
 - Extracts existing patterns, dependencies, and related tests
 - Interactively gathers the complete specification with one critical question at a time (no assumptions, one question per turn)
@@ -109,17 +164,19 @@
 - **Important:** this phase produces **no code**. It only creates analysis and specs. All generated docs are **in English**
 
 **Failure handling highlights:**
+
 - If paths are invalid or unreadable, it asks you to verify and retries
 - If the slug collides, it appends `-2`, `-3`, etc.
 - If new specs arrive while status is `PLANNING` or `READY`, it loops back to the Q&A step to refine them
 
 ---
 
-### ✅ 2. `/dev-run` — Execute the Implementation Plan
+### ✅ 2. `/run` — Execute the Implementation Plan
 
 **Purpose:** Move from planning to controlled execution.
 
 **What it does:**
+
 - Loads the active session from `.current-session` (or lets you pick one with status `READY`/`PLANNING`)
 - Verifies all session files exist and that `plan.md` contains runnable prompts (no circular dependencies)
 - Updates overview fields (`Last Updated`) and sets session status to `IN_PROGRESS`
@@ -131,16 +188,18 @@
 - If no further steps are executable, it prints a summary and **keeps** the global status as `IN_PROGRESS` (never auto‑completes)
 
 **Error handling:**
+
 - Missing session or files → suggests re‑init or attempts recovery
 - Failed step → marks as `FAILED`, assesses impact, and suggests remediation
 
 ---
 
-### ✅ 3. `/dev-end` — Finalize and Close the Session
+### ✅ 3. `/end` — Finalize and Close the Session
 
 **Purpose:** Properly wrap up the session with commits, docs, and final status.
 
 **What it does:**
+
 1. Loads the active session (or lets you pick one)
 2. Computes final status:
    - `COMPLETED` if all steps finished
@@ -154,6 +213,7 @@
 5. Clears the contents of `.claude/dev-sessions/.current-session` to mark the session as closed
 
 **Special cases:**
+
 - If session was only `PLANNING`, it simply updates timestamps and sets status to `READY` with no other edits
 
 ---
@@ -163,6 +223,7 @@
 **Purpose:** Perform a **read‑only** codebase analysis at any time, inside or outside a session.
 
 **What it does:**
+
 - Asks which folders/files to analyze (default: repo root)
 - Invokes the **code-quality-analyzer** sub‑agent using existing project tools (linters, TS checks, complexity, dependency audit), **without modifying files**
 - Writes a Markdown report to:
@@ -173,25 +234,24 @@
 - Populates: Executive Summary, Critical Issues, Issue Categories, File‑Level Details, Actionable Recommendations, Metrics
 - Report status lifecycle: `PENDING` → `DONE` (or `ABORTED` if skipped)
 
-**Scope defaults (ignored by default):**
-`node_modules`, `.git`, `dist`, `build`, `.next`, `.vite`, `coverage`, `.turbo`, `.cache`, `tmp`, lockfiles, and generated artifacts.
-Overrides are available with `--include` / `--exclude` flags.
+**Scope defaults (ignored by default):** `node_modules`, `.git`, `dist`, `build`, `.next`, `.vite`, `coverage`, `.turbo`, `.cache`, `tmp`, lockfiles, and generated artifacts. Overrides are available with `--include` / `--exclude` flags.
 
 ---
 
 ## 🔗 How These Commands Work Together
 
-| Phase | Command | Goal |
-|------|---------|------|
-| 1 | `/dev-init` | Understand context and define requirements |
-| 2 | `/dev-run` | Implement the plan step‑by‑step with tracked progress |
-| 3 | `/dev-end` | Commit, document, and formally close the session |
-| Optional (anytime) | `/quality-check` | Audit code health with a read‑only report |
+| Phase              | Command          | Goal                                                  |
+| ------------------ | ---------------- | ----------------------------------------------------- |
+| 1                  | `/init`          | Understand context and define requirements            |
+| 2                  | `/run`           | Implement the plan step‑by‑step with tracked progress |
+| 3                  | `/end`           | Commit, document, and formally close the session      |
+| Optional (anytime) | `/quality-check` | Audit code health with a read‑only report             |
 
 **Typical lifecycle:**
-1. Start a new feature → `/dev-init`
-2. Execute tasks iteratively → `/dev-run` (repeat as needed)
-3. Finalize and document → `/dev-end`
+
+1. Start a new feature → `/init`
+2. Execute tasks iteratively → `/run` (repeat as needed)
+3. Finalize and document → `/end`
 4. (Optional) Audit code health → `/quality-check`
 
 ---
@@ -209,7 +269,35 @@ Overrides are available with `--include` / `--exclude` flags.
 
 ---
 
-## 📂 Session Structure
+## 📂 Project Structure
+
+### Plugin Structure
+
+```
+dev-workflow-automation/
+├── commands/                                 # User-invoked slash commands
+│   ├── init.md                              # /init command
+│   ├── run.md                               # /run command
+│   ├── end.md                               # /end command
+│   └── quality-check.md                     # /quality-check command
+├── skills/                                   # Model-invoked reusable logic
+│   ├── session-manager/SKILL.md
+│   ├── artifact-fs-manager/SKILL.md
+│   ├── dev-context-analysis/SKILL.md
+│   ├── dev-specification-qa/SKILL.md
+│   ├── dev-plan-orchestrator/SKILL.md
+│   ├── dev-execution-orchestrator/SKILL.md
+│   ├── dev-session-closure/SKILL.md
+│   ├── dev-quality-report/SKILL.md
+│   └── git-and-docs/SKILL.md
+├── agents/                                   # Sub-agents for heavy lifting
+│   ├── development-planner.md
+│   ├── react-frontend-dev.md
+│   └── ... (11 agents total)
+└── .claude-plugin/plugin.json               # Plugin metadata
+```
+
+### Session Structure
 
 Each session creates the following structure:
 
@@ -230,11 +318,11 @@ Each session creates the following structure:
 
 ## 🎓 Best Practices
 
-1. **Be thorough during `/dev-init`** - Answer all questions carefully; good specs = good results
-2. **Review the plan before `/dev-run`** - Check `plan.md` to understand what will happen
+1. **Be thorough during `/init`** - Answer all questions carefully; good specs = good results
+2. **Review the plan before `/run`** - Check `plan.md` to understand what will happen
 3. **Run `/quality-check` early** - Catch issues before they compound
 4. **Use incremental sessions** - Break large features into smaller sessions
-5. **Commit frequently** - Use `/dev-end` to save progress even if not fully complete
+5. **Commit frequently** - Use `/end` to save progress even if not fully complete
 6. **Review generated docs** - Documentation is auto-generated but you should verify it
 7. **Keep sessions focused** - One feature/fix per session for clarity
 
@@ -253,6 +341,7 @@ Each session creates the following structure:
 ## 🐛 Troubleshooting
 
 **Session not found:**
+
 ```bash
 # Check if .current-session exists
 cat .claude/dev-sessions/.current-session
@@ -262,14 +351,16 @@ ls -la .claude/dev-sessions/
 ```
 
 **Plan execution fails:**
+
 ```bash
 # Review the plan for circular dependencies
 cat .claude/dev-sessions/$(cat .claude/dev-sessions/.current-session)/plan.md
 
-# Restart from /dev-init if needed
+# Restart from /init if needed
 ```
 
 **Quality check takes too long:**
+
 ```bash
 # Run on specific directories only
 /quality-check --path src/components
@@ -280,6 +371,7 @@ cat .claude/dev-sessions/$(cat .claude/dev-sessions/.current-session)/plan.md
 ## 👥 Authors
 
 Ideated and developed in collaboration with:
+
 - **Matteo Adduci** - [@cicababba](https://github.com/cicababba)
 - **Giuseppe Vincenzi** - [@giuvincenzi](https://github.com/giuvincenzi)
 
