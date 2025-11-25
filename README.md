@@ -37,7 +37,7 @@ Transform your development process with structured planning, execution tracking,
 ### 4. Start Using Commands
 
 ```bash
-/dev-init    # Start a new development session
+/init    # Start a new development session
 ```
 
 ---
